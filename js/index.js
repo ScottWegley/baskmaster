@@ -4,28 +4,19 @@
  */
 
 (function() {
+	// Non-interactive scoreboard: load contestants from ./scores.csv
 	var contestants = [];
 
-	var locked = false;
-
 	var main = document.querySelector("main");
-	var fileInput = document.querySelector("#file-input");
 	var playButton = document.querySelector("#play-button");
 
-	function addContestant(image) {
+	function addContestantFromData(imageUrl, score) {
 		var contestant = {};
-
-		contestant.image = !!image ? image : "./images/blank.jpg";
-		contestant.score = 0;
-		contestant.oldScore = 0;
-
+		contestant.image = imageUrl;
+		contestant.score = score;
+		contestant.oldScore = score;
 		contestants.push(contestant);
-
 		return contestants.length;
-	}
-
-	function removeContestant(idx) {
-		contestants.splice(idx, 1);
 	}
 
 	function createContestantEl(con, id) {
@@ -53,35 +44,9 @@
 		frame.removeAttribute("width");
 		frame.removeAttribute("height");
 
-		frame.addEventListener("click", function() {
-			var cb = function(evt) {
-				if (fileInput.files && fileInput.files[0]) {
-					con.image = URL.createObjectURL(fileInput.files[0]);
-					fill.style.backgroundImage = "url(" + con.image + ")";
-				}
-				fileInput.removeEventListener("change", cb);
-				fileInput.value = "";
-			};
-
-			fileInput.addEventListener("change", cb);
-			fileInput.click();
-		});
-
-		var exit = document.createElement("button");
-		exit.classList.add("exit-button");
-		exit.innerText = "X";
-		exit.addEventListener("click", function() {
-			removeContestant(id - 1);
-			refreshContestants();
-			resize();
-		});
-
 		fill.appendChild(shadow);
 		frameContainer.appendChild(fill);
 		frameContainer.appendChild(frame);
-
-		if (!locked) frameContainer.appendChild(exit);
-
 		frameScaler.appendChild(frameContainer);
 
 		var scoreContainer = document.createElement("div");
@@ -95,53 +60,11 @@
 
 		var score = document.createElement("h1");
 		score.classList.add("score");
-		score.innerText = con.oldScore;
+		score.innerText = con.score;
 
 		scoreContainer.appendChild(seal);
 		scoreContainer.appendChild(score);
 
-		var input = document.createElement("input");
-		input.classList.add("score-edit");
-		input.type = "number";
-
-		scoreContainer.isOpen = false;
-		scoreContainer.addEventListener("mouseup", function(evt) {
-			scoreContainer.isOpen = !scoreContainer.isOpen;
-
-			if(scoreContainer.isOpen) {
-				scoreContainer.appendChild(input);
-				input.value = con.score;
-				input.focus();
-				input.select();
-			} else {
-				scoreContainer.removeChild(input);
-			}
-		});
-
-		var exit = function() {
-			scoreContainer.isOpen = false;
-			scoreContainer.removeChild(input);
-
-			var score = !!input.value ? parseFloat(input.value) : 0;
-
-			if (con.score != score) {
-				con.score = score;
-				showPlay();
-			}
-		};
-
-		input.addEventListener("focusout", exit);
-		input.addEventListener("onkeydown", function(evt) {
-			if (evt.key === "Enter") {
-				exit();
-			}
-		});
-
-		input.addEventListener("mouseup", function(evt) {
-			evt.stopPropagation();
-			evt.stopImmediatePropagation();
-		});
-		
 		el.appendChild(frameScaler);
 		el.appendChild(scoreContainer);
 
@@ -149,24 +72,18 @@
 	}
 
 	function transformContestants() {
+		if (!contestants || contestants.length === 0) return;
 
 		contestants.sort(function(first, second) {
-			if (first.score < second.score) {
-				return -1;
-			} else if (first.score > second.score) {
-				return 1;
-			} else {
-				return 0;
-			}
+			return first.score - second.score;
 		});
 
-		
 		var maxScore = contestants[contestants.length - 1].score;
 		var maxCount = 1;
 
 		for (var i = contestants.length - 1; i > 0; --i) {
-			var con = contestants[i-1];
-			if (con.score == maxScore) {
+			var conPrev = contestants[i - 1];
+			if (conPrev.score == maxScore) {
 				++maxCount;
 			}
 		}
@@ -191,121 +108,72 @@
 			}
 		}
 	}
-	
-	function createAdd(len) {
-		var res = document.createElement("button");
-
-		res.innerText = "+";
-
-		res.classList.add("add-button")
-
-		res.style.msTransform = "translateX(" + (275 * len + 30) + "px)";
-		res.style.transform = "translateX(" + (275 * len + 30) + "px)";
-
-		res.addEventListener("click", function() {
-			addContestant();
-			refreshContestants();
-			resize();
-		});
-
-		return res;
-	}
 
 	function refreshContestants() {
 		main.innerHTML = "";
 
-		for (var i = contestants.length; i > 0; --i) {
-			var con = contestants[i-1];
-
-			var cEl = createContestantEl(con, i);
+		for (var i = 0; i < contestants.length; ++i) {
+			var con = contestants[i];
+			var cEl = createContestantEl(con, i + 1);
 			con.el = cEl;
 		}
 
 		if (contestants.length > 0) transformContestants();
-		
-		for (var i = contestants.length; i > 0; --i) {
-			var con = contestants[i-1];
-			main.appendChild(con.el);
-		}
 
-		if (!locked) {
-			main.appendChild(createAdd(contestants.length));
+		for (var j = 0; j < contestants.length; ++j) {
+			main.appendChild(contestants[j].el);
 		}
 	}
 
-	function ease(t, a, b) {
-		var eased = t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-		return (b - a) * eased + a;
+	function parseCSV(text) {
+		var lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+
+		for (var i = 0; i < lines.length; ++i) {
+			var parts = lines[i].split(",");
+			if (parts.length < 2) continue;
+			var imageName = parts[0].trim();
+			var scoreVal = parseFloat(parts[1].trim());
+			if (!imageName || isNaN(scoreVal)) continue;
+			addContestantFromData("./images/" + imageName, scoreVal);
+		}
 	}
 
-	function showPlay() {
-		playButton.style.display = "block";
-	}
-
-	function play() {
-		playButton.style.display = "none";
-
-		if (!locked) {
-			locked = true;
-			
-			document.body.classList.add("locked");
-
+	function loadCSV() {
+		fetch("./scores.csv").then(function(res) {
+			if (!res.ok) throw new Error("HTTP " + res.status);
+			return res.text();
+		}).then(function(text) {
+			parseCSV(text);
+			if (contestants.length === 0) {
+				showFallback('No valid entries found in scores.csv');
+				return;
+			}
+			refreshContestants();
 			resize();
-		}
-
-		setTimeout(function() {
-			var start = 0;
-			var loop = function(dt) {
-				if (start == 0) {
-					start = dt;
-				}
-	
-				for (var i = 0, l = contestants.length; i < l; ++i) {
-					var con = contestants[i];
-	
-					var startRemainder = con.oldScore - Math.floor(con.oldScore);
-					var endRemainder = con.score - Math.floor(con.score);
-	
-					var scoreEl = con.el.querySelector(".score");
-	
-					var score = Math.round(ease(Math.min((dt - start) / 2000, 1), Math.floor(con.oldScore), Math.floor(con.score)));
-	
-					if (dt - start < 1000) {
-						score += startRemainder;
-					} else {
-						score += endRemainder;
-					}
-	
-					scoreEl.innerText = score;
-				}
-	
-				if (dt - start < 2000) {
-					window.requestAnimationFrame(loop);
-				} else {
-					for (var i = 0, l = contestants.length; i < l; ++i) {
-						var con = contestants[i];
-						con.oldScore = con.score;
-					}
-				}
-			};
-	
-			window.requestAnimationFrame(loop);
-			transformContestants();
-		}, 1000);
+		}).catch(function(err) {
+			console.error("Failed to load scores.csv:", err);
+			showFallback('Failed to load scores.csv');
+		});
 	}
 
-	playButton.addEventListener("mouseup", play);
+	function showFallback(msg) {
+		main.innerHTML = "";
+		var el = document.createElement('div');
+		el.className = 'csv-fallback';
+		el.style.padding = '40px';
+		el.style.textAlign = 'center';
+		el.style.color = '#fff';
+		el.style.fontFamily = 'veteran_typewriter, sans-serif';
+		el.style.fontSize = '20px';
+		el.innerText = msg + '\n\nPlace a scores.csv file at the site root with lines: image_name,score';
+		main.appendChild(el);
+	}
 
-	for (var i = 0; i < 5; ++i)
-		addContestant();
-
-	refreshContestants();
-
-	function resize(rep) {
+	function resize() {
 		var w = window.innerWidth;
 		var h = window.innerHeight;
 
-		var wm = 1400 * ((contestants.length + (locked ? 0 : 0.25)) / 5);
+		var wm = 1400 * ((contestants.length) / 5);
 
 		var m = Math.min(w / wm, h / 1080);
 
@@ -315,6 +183,9 @@
 		main.style.left = (w - wm * m) / 2 + "px";
 	}
 
+	if (playButton) playButton.style.display = "none";
+
 	window.addEventListener("resize", resize);
-	resize();
+
+	loadCSV();
 })();
