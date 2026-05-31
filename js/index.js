@@ -134,7 +134,7 @@
 			var imageName = parts[0].trim();
 			var scoreVal = parseFloat(parts[1].trim());
 			if (!imageName || isNaN(scoreVal)) continue;
-			addContestantFromData("./images/" + imageName, scoreVal);
+			addContestantFromData("./images/participants/" + imageName, scoreVal);
 		}
 	}
 
@@ -152,8 +152,23 @@
 			resize();
 		}).catch(function(err) {
 			console.error("Failed to load scores.csv:", err);
-			showFallback('Failed to load scores.csv');
+			showFallback('Failed to load scores.csv. If you are opening index.html directly from disk, use a local HTTP server or load a CSV file below.');
 		});
+	}
+
+	function loadCSVFromFile(file) {
+		var reader = new FileReader();
+		reader.onload = function(evt) {
+			contestants = [];
+			parseCSV(evt.target.result);
+			if (contestants.length === 0) {
+				showFallback('No valid entries found in that CSV file');
+				return;
+			}
+			refreshContestants();
+			resize();
+		};
+		reader.readAsText(file);
 	}
 
 	function showFallback(msg) {
@@ -165,8 +180,30 @@
 		el.style.color = '#fff';
 		el.style.fontFamily = 'veteran_typewriter, sans-serif';
 		el.style.fontSize = '20px';
-		el.innerText = msg + '\n\nPlace a scores.csv file at the site root with lines: image_name,score';
+		el.innerText = msg + '\n\nUse a scores.csv file with lines: image_name,score';
 		main.appendChild(el);
+
+		var fileInput = document.createElement('input');
+		fileInput.type = 'file';
+		fileInput.accept = '.csv';
+		fileInput.style.display = 'none';
+		fileInput.addEventListener('change', function() {
+			if (fileInput.files && fileInput.files[0]) {
+				loadCSVFromFile(fileInput.files[0]);
+			}
+		});
+		main.appendChild(fileInput);
+
+		var button = document.createElement('button');
+		button.innerText = 'Choose scores.csv file';
+		button.style.marginTop = '16px';
+		button.style.padding = '12px 18px';
+		button.style.fontSize = '18px';
+		button.style.cursor = 'pointer';
+		button.addEventListener('click', function() {
+			fileInput.click();
+		});
+		main.appendChild(button);
 	}
 
 	function resize() {
