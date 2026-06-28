@@ -10,6 +10,25 @@
 	var main = document.querySelector("main");
 	var playButton = document.querySelector("#play-button");
 
+	function getImageUrl(imageName) {
+		// Try to find the image as .png first, then .gif
+		var basePath = "./images/participants/";
+		var imagePath = basePath + imageName;
+		var pngPath = imagePath.endsWith(".png") || imagePath.endsWith(".gif") ? imagePath : imagePath + ".png";
+		var gifPath = pngPath.replace(".png", ".gif");
+
+		return new Promise(function(resolve) {
+			var img = new Image();
+			img.onload = function() {
+				resolve(pngPath);
+			};
+			img.onerror = function() {
+				resolve(gifPath);
+			};
+			img.src = pngPath;
+		});
+	}
+
 	function addContestantFromData(imageUrl, score) {
 		var contestant = {};
 		contestant.image = imageUrl;
@@ -127,6 +146,7 @@
 
 	function parseCSV(text) {
 		var lines = text.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+		var promises = [];
 
 		for (var i = 0; i < lines.length; ++i) {
 			var parts = lines[i].split(",");
@@ -134,8 +154,17 @@
 			var imageName = parts[0].trim();
 			var scoreVal = parseFloat(parts[1].trim());
 			if (!imageName || isNaN(scoreVal)) continue;
-			addContestantFromData("./images/participants/" + imageName, scoreVal);
+			
+			(function(name, score) {
+				promises.push(
+					getImageUrl(name).then(function(url) {
+						addContestantFromData(url, score);
+					})
+				);
+			})(imageName, scoreVal);
 		}
+
+		return Promise.all(promises);
 	}
 
 	function loadCSV() {
@@ -143,7 +172,8 @@
 			if (!res.ok) throw new Error("HTTP " + res.status);
 			return res.text();
 		}).then(function(text) {
-			parseCSV(text);
+			return parseCSV(text);
+		}).then(function() {
 			if (contestants.length === 0) {
 				showFallback('No valid entries found in scores.csv');
 				return;
@@ -160,13 +190,14 @@
 		var reader = new FileReader();
 		reader.onload = function(evt) {
 			contestants = [];
-			parseCSV(evt.target.result);
-			if (contestants.length === 0) {
-				showFallback('No valid entries found in that CSV file');
-				return;
-			}
-			refreshContestants();
-			resize();
+			parseCSV(evt.target.result).then(function() {
+				if (contestants.length === 0) {
+					showFallback('No valid entries found in that CSV file');
+					return;
+				}
+				refreshContestants();
+				resize();
+			});
 		};
 		reader.readAsText(file);
 	}
