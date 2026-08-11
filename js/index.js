@@ -4,11 +4,14 @@
  */
 
 (function() {
-	// Non-interactive scoreboard: load contestants from ./scores.csv
 	var contestants = [];
-
 	var main = document.querySelector("main");
 	var playButton = document.querySelector("#play-button");
+	var datasetOptions = ["Choose CSV", "Season"];
+
+	for (var i = 1; i <= 13; ++i) {
+		datasetOptions.push("Episode " + i);
+	}
 
 	function getImageUrl(imageName) {
 		// Try to find the image as .png first, then .gif
@@ -167,22 +170,37 @@
 		return Promise.all(promises);
 	}
 
-	function loadCSV() {
-		fetch("./scores.csv").then(function(res) {
+	function getDatasetPath(optionValue) {
+		if (!optionValue || optionValue === "Season") {
+			return "./scores/season.csv";
+		}
+
+		var episodeNumber = parseInt(optionValue.replace("Episode ", ""), 10);
+		if (isNaN(episodeNumber)) {
+			return "./scores/season.csv";
+		}
+
+		return "./scores/episode-" + String(episodeNumber).padStart(2, "0") + ".csv";
+	}
+
+	function loadCSV(url, label) {
+		var fileLabel = label || url;
+		contestants = [];
+		fetch(url).then(function(res) {
 			if (!res.ok) throw new Error("HTTP " + res.status);
 			return res.text();
 		}).then(function(text) {
 			return parseCSV(text);
 		}).then(function() {
 			if (contestants.length === 0) {
-				showFallback('No valid entries found in scores.csv');
+				showFallback('No valid entries found in ' + fileLabel);
 				return;
 			}
 			refreshContestants();
 			resize();
 		}).catch(function(err) {
-			console.error("Failed to load scores.csv:", err);
-			showFallback('Failed to load scores.csv. If you are opening index.html directly from disk, use a local HTTP server or load a CSV file below.');
+			console.error("Failed to load " + fileLabel + ":", err);
+			showFallback('Failed to load ' + fileLabel + '. Choose another CSV file or pick a different season/episode.');
 		});
 	}
 
@@ -204,15 +222,17 @@
 
 	function showFallback(msg) {
 		main.innerHTML = "";
-		var el = document.createElement('div');
-		el.className = 'csv-fallback';
-		el.style.padding = '40px';
-		el.style.textAlign = 'center';
-		el.style.color = '#fff';
-		el.style.fontFamily = 'veteran_typewriter, sans-serif';
-		el.style.fontSize = '20px';
-		el.innerText = msg + '\n\nUse a scores.csv file with lines: image_name,score';
-		main.appendChild(el);
+		var controls = document.createElement('div');
+		controls.style.display = 'flex';
+		controls.style.alignItems = 'center';
+		controls.style.justifyContent = 'center';
+		controls.style.gap = '12px';
+		controls.style.flexWrap = 'wrap';
+		controls.style.padding = '30px 20px';
+		controls.style.boxSizing = 'border-box';
+		controls.style.width = '100%';
+		controls.style.maxWidth = '760px';
+		controls.style.margin = '0 auto';
 
 		var fileInput = document.createElement('input');
 		fileInput.type = 'file';
@@ -223,18 +243,58 @@
 				loadCSVFromFile(fileInput.files[0]);
 			}
 		});
-		main.appendChild(fileInput);
 
 		var button = document.createElement('button');
-		button.innerText = 'Choose scores.csv file';
-		button.style.marginTop = '16px';
+		button.innerText = 'Choose CSV file';
 		button.style.padding = '12px 18px';
 		button.style.fontSize = '18px';
 		button.style.cursor = 'pointer';
+		button.style.display = 'none';
 		button.addEventListener('click', function() {
 			fileInput.click();
 		});
-		main.appendChild(button);
+
+		var select = document.createElement('select');
+		select.style.padding = '12px 18px';
+		select.style.fontSize = '18px';
+		select.style.cursor = 'pointer';
+		select.style.minWidth = '170px';
+		datasetOptions.forEach(function(optionName) {
+			var option = document.createElement('option');
+			option.value = optionName;
+			option.textContent = optionName;
+			select.appendChild(option);
+		});
+		select.value = 'Choose CSV';
+		button.style.display = 'inline-block';
+		select.addEventListener('change', function() {
+			var selected = select.value;
+			button.style.display = selected === 'Choose CSV' ? 'inline-block' : 'none';
+			if (selected === 'Choose CSV') {
+				return;
+			}
+			var path = getDatasetPath(selected);
+			if (selected === 'Season') {
+				loadCSV(path, 'scores/season.csv');
+				return;
+			}
+			loadCSV(path, 'scores/' + selected.replace(' ', '-') + '.csv');
+		});
+
+		controls.appendChild(button);
+		controls.appendChild(select);
+		main.appendChild(controls);
+
+		var el = document.createElement('div');
+		el.className = 'csv-fallback';
+		el.style.padding = '10px 40px 40px';
+		el.style.textAlign = 'center';
+		el.style.color = '#fff';
+		el.style.fontFamily = 'veteran_typewriter, sans-serif';
+		el.style.fontSize = '20px';
+		el.innerText = msg + '\n\nUse a CSV file with lines: image_name,score';
+		main.appendChild(el);
+		main.appendChild(fileInput);
 	}
 
 	function resize() {
@@ -255,5 +315,5 @@
 
 	window.addEventListener("resize", resize);
 
-	loadCSV();
+	showFallback('Select a CSV file or choose a season/episode from the dropdown.');
 })();
