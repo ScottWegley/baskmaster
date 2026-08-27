@@ -74,6 +74,20 @@
 		var scoreContainer = document.createElement("div");
 		scoreContainer.classList.add("score-container");
 
+		// Add left and right click detection to scoreContainer to increment/decerement score. Entirely performed in memory, so csv files would need to be modified after. 
+		// Mostly used for end of episode live score updates should there be any mistakes/complaints from the peanut gallery, and then csvs can be updated after recording. 
+		scoreContainer.addEventListener("click", function() {
+			con.score++;
+			score.innerText = con.score;
+			transformContestants();
+		});
+		scoreContainer.addEventListener("contextmenu", function(e) {
+			e.preventDefault();
+			con.score--;
+			score.innerText = con.score;
+			transformContestants();
+		});
+
 		var seal = document.createElement("img");
 		seal.classList.add("seal");
 		seal.src = "./images/seal.png";
